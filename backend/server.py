@@ -17,6 +17,8 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 from io import BytesIO
 import calendar
+import json
+from bson import json_util
 
 
 ROOT_DIR = Path(__file__).parent
@@ -241,6 +243,11 @@ async def generate_pdf(invoice: Invoice, company: CompanyProfile):
     buffer.seek(0)
     return buffer
 
+# Custom JSON encoder to handle date objects
+def custom_json_encoder(obj):
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
@@ -268,8 +275,13 @@ async def create_invoice(invoice_data: InvoiceCreate):
     invoice_dict["status"] = "Paid" if invoice_data.payment_type == "Cash" else "Unpaid"
     invoice_dict["amount_paid"] = invoice_data.total if invoice_data.payment_type == "Cash" else 0
     
+    # Convert date objects to strings for MongoDB
+    if invoice_dict.get("due_date"):
+        invoice_dict["due_date"] = invoice_dict["due_date"].isoformat()
+    invoice_dict["invoice_date"] = invoice_dict["invoice_date"].isoformat()
+    
     invoice = Invoice(**invoice_dict)
-    result = await db.invoices.insert_one(invoice.dict())
+    result = await db.invoices.insert_one(json.loads(json.dumps(invoice.dict(), default=custom_json_encoder)))
     
     if result.inserted_id:
         return invoice
@@ -279,6 +291,12 @@ async def create_invoice(invoice_data: InvoiceCreate):
 @api_router.get("/invoices", response_model=List[Invoice])
 async def get_invoices():
     invoices = await db.invoices.find().to_list(1000)
+    # Convert string dates back to date objects
+    for invoice in invoices:
+        if invoice.get("invoice_date"):
+            invoice["invoice_date"] = date.fromisoformat(invoice["invoice_date"])
+        if invoice.get("due_date"):
+            invoice["due_date"] = date.fromisoformat(invoice["due_date"])
     return [Invoice(**invoice) for invoice in invoices]
 
 @api_router.get("/invoices/{invoice_id}", response_model=Invoice)
@@ -286,6 +304,11 @@ async def get_invoice(invoice_id: str):
     invoice = await db.invoices.find_one({"id": invoice_id})
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
+    # Convert string dates back to date objects
+    if invoice.get("invoice_date"):
+        invoice["invoice_date"] = date.fromisoformat(invoice["invoice_date"])
+    if invoice.get("due_date"):
+        invoice["due_date"] = date.fromisoformat(invoice["due_date"])
     return Invoice(**invoice)
 
 @api_router.get("/invoices/{invoice_id}/pdf")
@@ -293,6 +316,12 @@ async def download_invoice_pdf(invoice_id: str):
     invoice = await db.invoices.find_one({"id": invoice_id})
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    # Convert string dates back to date objects
+    if invoice.get("invoice_date"):
+        invoice["invoice_date"] = date.fromisoformat(invoice["invoice_date"])
+    if invoice.get("due_date") and invoice["due_date"]:
+        invoice["due_date"] = date.fromisoformat(invoice["due_date"])
     
     # Get company profile
     company_doc = await db.company_profile.find_one()
@@ -380,9 +409,12 @@ async def get_reports_summary():
     today = datetime.now().date()
     start_of_month = datetime(today.year, today.month, 1)
     
+    # Convert date to string for MongoDB query
+    today_str = today.isoformat()
+    
     # Today's sales
     today_sales = await db.invoices.aggregate([
-        {"$match": {"invoice_date": {"$eq": today}}},
+        {"$match": {"invoice_date": {"$eq": today_str}}},
         {"$group": {
             "_id": None,
             "total_sales": {"$sum": "$total"},
