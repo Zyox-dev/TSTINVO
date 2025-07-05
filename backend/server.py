@@ -162,9 +162,9 @@ async def generate_pdf(invoice: Invoice, company: CompanyProfile):
     
     # Invoice Header
     invoice_header = f"""
-    <para align=center><b>INVOICE</b></para>
-    <para align=center>Invoice No: {invoice.invoice_number}</para>
-    <para align=center>Date: {invoice.invoice_date.strftime('%d-%m-%Y')}</para>
+    <para alignment="center"><b>INVOICE</b></para>
+    <para alignment="center">Invoice No: {invoice.invoice_number}</para>
+    <para alignment="center">Date: {invoice.invoice_date.strftime('%d-%m-%Y')}</para>
     """
     story.append(Paragraph(invoice_header, styles['Normal']))
     
