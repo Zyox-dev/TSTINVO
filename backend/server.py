@@ -160,16 +160,13 @@ async def generate_pdf(invoice: Invoice, company: CompanyProfile):
     
     story.append(Spacer(1, 20))
     
-    # Invoice Header
-    invoice_header = f"""
-    <para alignment="center"><b>INVOICE</b></para>
-    <para alignment="center">Invoice No: {invoice.invoice_number}</para>
-    <para alignment="center">Date: {invoice.invoice_date.strftime('%d-%m-%Y')}</para>
-    """
-    story.append(Paragraph(invoice_header, styles['Normal']))
+    # Invoice Header - Use simple paragraphs instead of HTML
+    story.append(Paragraph("INVOICE", ParagraphStyle('InvoiceTitle', parent=styles['Heading2'], alignment=TA_CENTER)))
+    story.append(Paragraph(f"Invoice No: {invoice.invoice_number}", ParagraphStyle('InvoiceInfo', parent=styles['Normal'], alignment=TA_CENTER)))
+    story.append(Paragraph(f"Date: {invoice.invoice_date.strftime('%d-%m-%Y')}", ParagraphStyle('InvoiceInfo', parent=styles['Normal'], alignment=TA_CENTER)))
     
     if invoice.due_date:
-        story.append(Paragraph(f"Due Date: {invoice.due_date.strftime('%d-%m-%Y')}", styles['Normal']))
+        story.append(Paragraph(f"Due Date: {invoice.due_date.strftime('%d-%m-%Y')}", ParagraphStyle('InvoiceInfo', parent=styles['Normal'], alignment=TA_CENTER)))
     
     story.append(Spacer(1, 20))
     
